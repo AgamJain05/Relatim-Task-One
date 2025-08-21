@@ -18,9 +18,11 @@ export const useAuthStore = create(
         
         if (token && user) {
           try {
+            const parsedUser = JSON.parse(user)
+            
             set({
               token,
-              user: JSON.parse(user),
+              user: parsedUser,
               isAuthenticated: true,
             })
           } catch (error) {
@@ -153,7 +155,9 @@ export const useAuthStore = create(
         
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
-          return payload.exp * 1000 < Date.now()
+          // Add 5 minute buffer to prevent premature expiration
+          const bufferTime = 5 * 60 * 1000 // 5 minutes in milliseconds
+          return (payload.exp * 1000) < (Date.now() + bufferTime)
         } catch {
           return true
         }

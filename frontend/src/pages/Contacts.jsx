@@ -110,8 +110,15 @@ const Contacts = () => {
 
   const handleStartChat = (contact) => {
     console.log('Starting chat with contact:', contact)
+    console.log('Navigating to:', `/chat/${contact.contactUserId}`)
+    
     // Navigate to specific chat URL
     navigate(`/chat/${contact.contactUserId}`)
+    
+    // Also log the current location after navigation
+    setTimeout(() => {
+      console.log('Current location after navigation:', window.location.pathname)
+    }, 100)
   }
 
   const contacts = contactsData?.data?.data?.contacts || []

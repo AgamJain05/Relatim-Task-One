@@ -14,6 +14,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -28,13 +29,8 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Unauthorized - clear auth data and redirect to login
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
-      toast.error('Session expired. Please login again.')
-    } else if (error.response?.status === 403) {
+    // Don't auto-redirect on 401 - let components handle it
+    if (error.response?.status === 403) {
       toast.error('Access forbidden')
     } else if (error.response?.status >= 500) {
       toast.error('Server error. Please try again later.')

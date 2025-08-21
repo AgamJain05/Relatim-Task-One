@@ -73,7 +73,7 @@ io.use(async (socket, next) => {
     }
 
     const decoded = verifyToken(token);
-    const user = await db.User.findByPk(decoded.userId);
+    const user = await db.User.findByPk(decoded.id); // Fixed: changed from decoded.userId to decoded.id
     
     if (!user) {
       return next(new Error('User not found'));

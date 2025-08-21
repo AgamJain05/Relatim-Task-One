@@ -32,9 +32,17 @@ export const SocketProvider = ({ children }) => {
     
     if (token && user) {
       // Initialize socket connection
-      const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+      console.log('Connecting to Socket.io server:', socketUrl)
+      
+      const socketInstance = io(socketUrl, {
         auth: { token },
         transports: ['websocket', 'polling'],
+        timeout: 20000,
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
       })
 
       socketInstance.on('connect', () => {
@@ -48,8 +56,8 @@ export const SocketProvider = ({ children }) => {
         queryClient.invalidateQueries(['conversations'])
       })
 
-      socketInstance.on('disconnect', () => {
-        console.log('Disconnected from server')
+      socketInstance.on('disconnect', (reason) => {
+        console.log('Disconnected from server:', reason)
         setIsConnected(false)
         // Remove current user from online users when disconnected
         setOnlineUsers(prev => {
@@ -57,11 +65,26 @@ export const SocketProvider = ({ children }) => {
           newSet.delete(user.id)
           return newSet
         })
+        
+        // If disconnection was not intentional, try to reconnect
+        if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+          console.log('Attempting to reconnect...')
+          socketInstance.connect()
+        }
       })
 
       socketInstance.on('connect_error', (error) => {
         console.error('Socket connection error:', error)
-        toast.error('Failed to connect to server')
+        setIsConnected(false)
+        
+        // Show specific error messages
+        if (error.message === 'User not found') {
+          console.error('Authentication failed - user not found in database')
+        } else if (error.message === 'Authentication error') {
+          console.error('JWT token validation failed')
+        } else {
+          console.error('Connection failed:', error.message)
+        }
       })
 
       socketInstance.on('user_online', (data) => {

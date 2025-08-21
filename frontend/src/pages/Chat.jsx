@@ -16,7 +16,7 @@ import {
   Check
 } from 'lucide-react'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
-import { chatAPI } from '../services/api'
+import { chatAPI, contactAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { useSocket } from '../contexts/SocketContext'
 import toast from 'react-hot-toast'
@@ -36,6 +36,8 @@ const Chat = () => {
   const { user } = useAuthStore()
   const { socket, sendMessage, isConnected, onlineUsers } = useSocket()
 
+
+
   // Helper function to check if user is online
   const isUserOnline = (userId) => {
     return onlineUsers.has(userId) || userId === user.id // Current user is always considered online
@@ -50,13 +52,25 @@ const Chat = () => {
     }
   )
 
+  // Fetch contacts to get contact information
+  const { data: contactsData } = useQuery(
+    'contacts',
+    () => contactAPI.getContacts(),
+    {
+      refetchInterval: 60000, // Refetch every minute
+    }
+  )
+
   // Check for selected conversation from URL or localStorage
   useEffect(() => {
+    console.log('Chat component mounted/updated with userId:', userId)
+    
     // First, check localStorage (coming from Contacts page)
     const savedConversation = localStorage.getItem('selectedConversation')
     if (savedConversation) {
       try {
         const conversation = JSON.parse(savedConversation)
+        console.log('Found saved conversation in localStorage:', conversation)
         setSelectedConversation(conversation)
         localStorage.removeItem('selectedConversation') // Clean up
         return
@@ -64,7 +78,7 @@ const Chat = () => {
         console.error('Error parsing saved conversation:', error)
       }
     }
-  }, [])
+  }, [userId])
 
   // Set conversation from URL parameter and conversations list
   useEffect(() => {
@@ -72,10 +86,18 @@ const Chat = () => {
     console.log('Chat useEffect - conversationsData:', conversationsData)
     
     if (userId && conversationsData?.data?.data?.conversations) {
-      const conversation = conversationsData.data.data.conversations.find(
-        conv => conv.user.id === userId
-      )
-      console.log('Chat useEffect - found conversation:', conversation)
+      const conversations = conversationsData.data.data.conversations
+      console.log('Available conversations:', conversations)
+      
+      // Try to find conversation by user ID
+      let conversation = conversations.find(conv => conv.user?.id === userId)
+      
+      // If not found, try to find by contactUserId (for contacts)
+      if (!conversation) {
+        conversation = conversations.find(conv => conv.contactUserId === userId)
+      }
+      
+      console.log('Found conversation:', conversation)
       
       if (conversation) {
         setSelectedConversation(conversation)
@@ -87,7 +109,7 @@ const Chat = () => {
             
             const conversations = old.data.data?.conversations || []
             const updatedConversations = conversations.map(conv => {
-              if (conv.user.id === userId) {
+              if (conv.user?.id === userId || conv.contactUserId === userId) {
                 return { ...conv, unreadCount: 0 }
               }
               return conv
@@ -106,9 +128,9 @@ const Chat = () => {
           })
         }
       } else {
-        // If no conversation exists, create a temporary one for the contact
-        console.log('No existing conversation found, creating temporary one')
+        console.log('No conversation found, creating temporary one for userId:', userId)
         
+        // If no conversation exists, create a temporary one for the contact
         // For self-chat, create a temporary conversation object
         if (userId === user.id) {
           const tempConversation = {
@@ -123,11 +145,28 @@ const Chat = () => {
             unreadCount: 0
           }
           setSelectedConversation(tempConversation)
-          console.log('Created temporary self-conversation:', tempConversation)
-        }
+                  } else {
+            // Create temporary conversation for contact
+            // Try to get contact info from the contacts list
+            const contacts = contactsData?.data?.data?.contacts || []
+            const contact = contacts.find(c => c.contactUserId === userId)
+            
+            const tempConversation = {
+              user: {
+                id: userId,
+                name: contact?.contactName || 'Contact',
+                email: contact?.contactUser?.email || '',
+                profilePicture: contact?.contactUser?.profilePicture || null,
+                isOnline: contact?.contactUser?.isOnline || false
+              },
+              lastMessage: null,
+              unreadCount: 0
+            }
+            setSelectedConversation(tempConversation)
+          }
       }
     }
-  }, [userId, conversationsData, queryClient])
+  }, [userId, conversationsData, contactsData, queryClient, user.id])
 
   // Fetch messages for selected conversation
   const { data: messagesData, isLoading: messagesLoading } = useQuery(
@@ -139,54 +178,52 @@ const Chat = () => {
     }
   )
 
+  // Debug: Log selectedConversation changes
+  useEffect(() => {
+    console.log('selectedConversation changed:', selectedConversation)
+  }, [selectedConversation])
+
   // Socket event listeners
   useEffect(() => {
     if (!socket) return
 
-    const handleNewMessage = (message) => {
-      console.log('New message event received:', message)
-      
-      // Skip if this is a message from the current user (handled by handleMessageSent)
-      if (message.senderId === user.id) {
-        console.log('Skipping new message from current user (handled by message_sent)')
-        return
-      }
-      
-      // Add message to cache (prevent duplicates)
-      queryClient.setQueryData(['messages', message.senderId], (old) => {
-        if (!old) return old
-        
-        const existingMessages = old.data.data?.messages || []
-        
-        // Check if message already exists to prevent duplicates
-        const messageExists = existingMessages.some(m => m.id === message.id)
-        if (messageExists) {
-          console.log('Message already exists, skipping duplicate')
-          return old
-        }
-        
-        // Also check for optimistic messages with same text to prevent duplicates
-        const optimisticExists = existingMessages.some(m => 
-          m.isOptimistic && m.messageText === message.messageText
-        )
-        if (optimisticExists) {
-          console.log('Optimistic message with same text exists, skipping duplicate')
-          return old
-        }
-        
-        console.log('Adding new message to cache')
-        
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            data: {
-              ...old.data.data,
-              messages: [...existingMessages, message]
-            }
-          }
-        }
-      })
+         const handleNewMessage = (message) => {
+       // Skip if this is a message from the current user (handled by handleMessageSent)
+       if (message.senderId === user.id) {
+         return
+       }
+       
+       // Add message to cache (prevent duplicates)
+       queryClient.setQueryData(['messages', message.senderId], (old) => {
+         if (!old) return old
+         
+         const existingMessages = old.data.data?.messages || []
+         
+         // Check if message already exists to prevent duplicates
+         const messageExists = existingMessages.some(m => m.id === message.id)
+         if (messageExists) {
+           return old
+         }
+         
+         // Also check for optimistic messages with same text to prevent duplicates
+         const optimisticExists = existingMessages.some(m => 
+           m.isOptimistic && m.messageText === message.messageText
+         )
+         if (optimisticExists) {
+           return old
+         }
+         
+         return {
+           ...old,
+           data: {
+             ...old.data,
+             data: {
+               ...old.data.data,
+               messages: [...existingMessages, message]
+             }
+           }
+         }
+       })
 
       // Update conversations cache to reflect new message and increment unread count
       queryClient.setQueryData(['conversations'], (old) => {
@@ -230,14 +267,11 @@ const Chat = () => {
       }
     }
 
-    const handleMessageSent = (message) => {
-      console.log('Message sent event received:', message)
-      
-      // Only handle messages sent by the current user
-      if (message.senderId !== user.id) {
-        console.log('Skipping message sent event - not from current user')
-        return
-      }
+         const handleMessageSent = (message) => {
+       // Only handle messages sent by the current user
+       if (message.senderId !== user.id) {
+         return
+       }
       
       // Add sent message to cache (prevent duplicates)
       queryClient.setQueryData(['messages', message.receiverId], (old) => {
@@ -250,14 +284,11 @@ const Chat = () => {
           !m.isOptimistic || m.messageText !== message.messageText
         )
         
-        // Check if this exact message already exists
-        const messageExists = filteredMessages.some(m => m.id === message.id)
-        if (messageExists) {
-          console.log('Message already exists, skipping duplicate')
-          return old
-        }
-        
-        console.log('Adding sent message to cache, removing optimistic message')
+                 // Check if this exact message already exists
+         const messageExists = filteredMessages.some(m => m.id === message.id)
+         if (messageExists) {
+           return old
+         }
         
         return {
           ...old,
@@ -332,9 +363,8 @@ const Chat = () => {
       isOptimistic: true // Flag to identify optimistic messages
     }
 
-    // Add optimistic message to cache
-    console.log('Adding optimistic message to cache:', optimisticMessage)
-    queryClient.setQueryData(['messages', selectedConversation.user.id], (old) => {
+         // Add optimistic message to cache
+     queryClient.setQueryData(['messages', selectedConversation.user.id], (old) => {
       if (!old) return old
       return {
         ...old,
@@ -351,15 +381,16 @@ const Chat = () => {
     // Clear input immediately
     setMessageText('')
 
-    try {
-      if (isConnected) {
-        sendMessage(messageData)
-      } else {
-        // Fallback to API if socket not connected
-        await chatAPI.sendMessage(messageData)
-        queryClient.invalidateQueries(['messages', selectedConversation.user.id])
-      }
-    } catch (error) {
+         try {
+       if (isConnected && socket) {
+         sendMessage(messageData)
+       } else {
+         // Fallback to API if socket not connected
+         await chatAPI.sendMessage(messageData)
+         queryClient.invalidateQueries(['messages', selectedConversation.user.id])
+         toast.success('Message sent via API (Socket reconnecting)')
+       }
+     } catch (error) {
       // Remove optimistic message on error
       queryClient.setQueryData(['messages', selectedConversation.user.id], (old) => {
         if (!old) return old
@@ -608,17 +639,24 @@ const Chat = () => {
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">
-                    {selectedConversation.user.id === user.id 
-                      ? `${selectedConversation.user.name} (You)` 
-                      : selectedConversation.user.name
-                    }
-                  </h3>
-                  <p className="text-xs text-gray-500">
-                    {isUserOnline(selectedConversation.user.id) ? 'Online' : 'Offline'}
-                  </p>
-                </div>
+                                 <div>
+                   <h3 className="text-sm font-medium text-gray-900">
+                     {selectedConversation.user.id === user.id 
+                       ? `${selectedConversation.user.name} (You)` 
+                       : selectedConversation.user.name
+                     }
+                   </h3>
+                   <p className="text-xs text-gray-500">
+                     {isUserOnline(selectedConversation.user.id) ? 'Online' : 'Offline'}
+                   </p>
+                   {/* Connection Status */}
+                   <div className="flex items-center space-x-1 mt-1">
+                     <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                     <span className="text-xs text-gray-400">
+                       {isConnected ? 'Connected' : 'Connecting...'}
+                     </span>
+                   </div>
+                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">

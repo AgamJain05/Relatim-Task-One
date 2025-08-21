@@ -23,7 +23,7 @@ const register = async (req, res, next) => {
 
     // Generate token
     const token = generateToken({
-      userId: user.id,
+      id: user.id,  // Fixed: changed from userId to id
       email: user.email
     });
 
@@ -70,7 +70,7 @@ const login = async (req, res, next) => {
 
     // Generate token
     const token = generateToken({
-      userId: user.id,
+      id: user.id,  // Fixed: changed from userId to id
       email: user.email
     });
 

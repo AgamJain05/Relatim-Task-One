@@ -14,7 +14,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     const decoded = verifyToken(token);
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(decoded.id); // Changed from decoded.userId to decoded.id
 
     if (!user) {
       return res.status(401).json({ 
@@ -26,7 +26,6 @@ const authenticateToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
     return res.status(403).json({ 
       success: false, 
       message: 'Invalid or expired token' 
@@ -41,7 +40,7 @@ const optionalAuth = async (req, res, next) => {
 
     if (token) {
       const decoded = verifyToken(token);
-      const user = await User.findByPk(decoded.userId);
+      const user = await User.findByPk(decoded.id); // Changed from decoded.userId to decoded.id
       if (user) {
         req.user = user;
       }
