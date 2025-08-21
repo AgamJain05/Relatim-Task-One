@@ -739,8 +739,9 @@ const Chat = () => {
                        )}
 
                        {/* Message Content */}
-                       {editingMessage?.id === message.id ? (
-                         <div className="space-y-2">
+                                      {editingMessage?.id === message.id ? (
+                 <div className="space-y-3 p-3 bg-whatsapp-50 border border-whatsapp-200 rounded-lg">
+                   <div className="text-xs text-whatsapp-700 font-medium mb-2">Editing message...</div>
                            <textarea
                              value={editText}
                              onChange={(e) => setEditText(e.target.value)}
@@ -752,24 +753,32 @@ const Chat = () => {
                                  handleCancelEdit()
                                }
                              }}
-                             className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-whatsapp-500 resize-none"
+                             className="w-full px-3 py-2 text-sm border-2 border-whatsapp-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-whatsapp-500 focus:border-whatsapp-500 resize-none bg-white shadow-sm"
+                             style={{ 
+                               color: '#111827', 
+                               backgroundColor: '#ffffff',
+                               caretColor: '#111827'
+                             }}
                              rows="2"
                              autoFocus
+                             placeholder="Edit your message..."
                            />
-                           <div className="flex items-center space-x-2">
-                             <button
-                               onClick={handleSaveEdit}
-                               className="p-1 text-whatsapp-600 hover:text-whatsapp-700 rounded"
-                             >
-                               <Check className="w-4 h-4" />
-                             </button>
-                             <button
-                               onClick={handleCancelEdit}
-                               className="p-1 text-gray-400 hover:text-gray-600 rounded"
-                             >
-                               <X className="w-4 h-4" />
-                             </button>
-                           </div>
+                                              <div className="flex items-center space-x-2">
+                     <button
+                       onClick={handleSaveEdit}
+                       className="px-3 py-2 text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors flex items-center space-x-1"
+                     >
+                       <Check className="w-4 h-4" />
+                       <span className="text-xs font-medium">Save</span>
+                     </button>
+                     <button
+                       onClick={handleCancelEdit}
+                       className="px-3 py-2 text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors flex items-center space-x-1"
+                     >
+                       <X className="w-4 h-4" />
+                       <span className="text-xs font-medium">Cancel</span>
+                     </button>
+                   </div>
                          </div>
                        ) : (
                          <>

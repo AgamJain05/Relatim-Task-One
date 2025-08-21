@@ -37,12 +37,13 @@ export const SocketProvider = ({ children }) => {
       
       const socketInstance = io(socketUrl, {
         auth: { token },
-        transports: ['websocket', 'polling'],
-        timeout: 20000,
-        forceNew: true,
+        transports: ['websocket'], // Only use WebSocket for faster connection
+        timeout: 10000, // Reduced timeout
+        forceNew: false, // Don't force new connection
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: 3, // Reduced attempts
+        reconnectionDelay: 500, // Faster reconnection
+        reconnectionDelayMax: 2000, // Max delay
       })
 
       socketInstance.on('connect', () => {
@@ -132,6 +133,7 @@ export const SocketProvider = ({ children }) => {
     sendMessage,
     markAsRead,
     emitTyping,
+    isLoading: !socket && token && user, // Show loading while connecting
   }
 
   return (
